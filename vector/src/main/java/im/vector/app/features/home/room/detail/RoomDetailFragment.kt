@@ -1618,6 +1618,9 @@ class RoomDetailFragment @Inject constructor(
             is EventSharedAction.Remove                     -> {
                 roomDetailViewModel.handle(RoomDetailAction.RemoveFailedEcho(action.eventId))
             }
+            is EventSharedAction.Cancel                     -> {
+                roomDetailViewModel.handle(RoomDetailAction.CancelSend(action.eventId))
+            }
             is EventSharedAction.ReportContentSpam          -> {
                 roomDetailViewModel.handle(RoomDetailAction.ReportContent(
                         action.eventId, action.senderId, "This message is spam", spam = true))
