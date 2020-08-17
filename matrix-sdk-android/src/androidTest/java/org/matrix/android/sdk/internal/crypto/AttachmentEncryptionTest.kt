@@ -29,6 +29,7 @@ import org.junit.FixMethodOrder
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
+import org.matrix.android.sdk.internal.crypto.attachments.toElementToDecrypt
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 
@@ -53,7 +54,7 @@ class AttachmentEncryptionTest {
             memoryFile.inputStream
         }
 
-        val decryptedStream = MXEncryptedAttachments.decryptAttachment(inputStream, encryptedFileInfo)
+        val decryptedStream = MXEncryptedAttachments.decryptAttachment(inputStream, encryptedFileInfo.toElementToDecrypt()!!)
 
         assertNotNull(decryptedStream)
 
