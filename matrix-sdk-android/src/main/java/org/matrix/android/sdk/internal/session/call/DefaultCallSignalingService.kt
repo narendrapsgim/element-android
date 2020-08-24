@@ -170,8 +170,8 @@ internal class DefaultCallSignalingService @Inject constructor(
                         return
                     }
 
-                    onCallHangup(content)
                     activeCalls.removeAll { it.callId == content.callId }
+                    onCallHangup(content)
                 }
             }
             EventType.CALL_CANDIDATES -> {

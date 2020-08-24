@@ -35,6 +35,12 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.matrix.android.sdk.api.session.call.CallsListener
+import org.matrix.android.sdk.api.session.call.MxCall
+import org.matrix.android.sdk.api.session.room.model.call.CallAnswerContent
+import org.matrix.android.sdk.api.session.room.model.call.CallCandidatesContent
+import org.matrix.android.sdk.api.session.room.model.call.CallHangupContent
+import org.matrix.android.sdk.api.session.room.model.call.CallInviteContent
 import org.matrix.android.sdk.internal.session.call.DefaultCallSignalingService
 import timber.log.Timber
 import java.net.SocketTimeoutException
@@ -51,7 +57,7 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
                                               private val networkConnectivityChecker: NetworkConnectivityChecker,
                                               private val backgroundDetectionObserver: BackgroundDetectionObserver,
                                               private val callService: DefaultCallSignalingService
-) : Thread(), NetworkConnectivityChecker.Listener, BackgroundDetectionObserver.Listener {
+) : Thread(), NetworkConnectivityChecker.Listener, BackgroundDetectionObserver.Listener, CallsListener {
 
     private var state: SyncState = SyncState.Idle
     private var liveState = MutableLiveData<SyncState>(state)
@@ -66,6 +72,7 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
 
     init {
         updateStateTo(SyncState.Idle)
+        callService.addCallListener(this)
     }
 
     fun setInitialForeground(initialForeground: Boolean) {
@@ -221,4 +228,22 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
             pause()
         }
     }
+
+    override fun onCallHangupReceived(callHangupContent: CallHangupContent) {
+        if (backgroundDetectionObserver.isInBackground && !callService.isThereAnyActiveCall()) {
+            pause()
+        }
+    }
+
+    override fun onCallManagedByOtherSession(callId: String) {
+        if (backgroundDetectionObserver.isInBackground && !callService.isThereAnyActiveCall()) {
+            pause()
+        }
+    }
+
+    override fun onCallInviteReceived(mxCall: MxCall, callInviteContent: CallInviteContent) { /* NOOP */ }
+
+    override fun onCallIceCandidateReceived(mxCall: MxCall, iceCandidatesContent: CallCandidatesContent) { /* NOOP */ }
+
+    override fun onCallAnswerReceived(callAnswerContent: CallAnswerContent) { /* NOOP */ }
 }
