@@ -35,6 +35,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.matrix.android.sdk.internal.session.call.DefaultCallSignalingService
 import timber.log.Timber
 import java.net.SocketTimeoutException
 import java.util.Timer
@@ -48,8 +49,9 @@ private const val DEFAULT_LONG_POOL_TIMEOUT = 30_000L
 internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
                                               private val typingUsersTracker: DefaultTypingUsersTracker,
                                               private val networkConnectivityChecker: NetworkConnectivityChecker,
-                                              private val backgroundDetectionObserver: BackgroundDetectionObserver)
-    : Thread(), NetworkConnectivityChecker.Listener, BackgroundDetectionObserver.Listener {
+                                              private val backgroundDetectionObserver: BackgroundDetectionObserver,
+                                              private val callService: DefaultCallSignalingService
+) : Thread(), NetworkConnectivityChecker.Listener, BackgroundDetectionObserver.Listener {
 
     private var state: SyncState = SyncState.Idle
     private var liveState = MutableLiveData<SyncState>(state)
@@ -215,6 +217,8 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
     }
 
     override fun onMoveToBackground() {
-        pause()
+        if (!callService.isThereAnyActiveCall()) {
+            pause()
+        }
     }
 }

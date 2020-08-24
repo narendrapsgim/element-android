@@ -20,6 +20,7 @@ Bugfix 🐛:
  - Fix crash reported by RageShake
  - Fix refreshing of sessions list when another session is logged out
  - Failed to build unique file (#1954)
+ - Can't handle ongoing call events in background (#1992)
 
 Translations 🗣:
  - Add PlayStore description resources in the Triple-T format, to let Weblate handle them

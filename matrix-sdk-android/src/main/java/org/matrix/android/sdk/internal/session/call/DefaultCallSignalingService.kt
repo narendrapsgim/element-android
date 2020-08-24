@@ -231,6 +231,8 @@ internal class DefaultCallSignalingService @Inject constructor(
         }
     }
 
+    fun isThereAnyActiveCall() = activeCalls.isNotEmpty()
+
     companion object {
         const val CALL_TIMEOUT_MS = 120_000
     }
