@@ -1,4 +1,28 @@
-Changes in Element 1.0.5 (2020-XX-XX)
+Changes in Element 1.0.6 (2020-XX-XX)
+===================================================
+
+Features ✨:
+ -
+
+Improvements 🙌:
+ -
+
+Bugfix 🐛:
+ - Display name not shown under Settings/General (#1926)
+
+Translations 🗣:
+ -
+
+SDK API changes ⚠️:
+ - 
+
+Build 🧱:
+ - Some dependencies have been upgraded (coroutine, recyclerView, appCompat, core-ktx, firebase-messaging)
+
+Other changes:
+ -
+
+Changes in Element 1.0.5 (2020-08-21)
 ===================================================
 
 Features ✨:
@@ -6,9 +30,11 @@ Features ✨:
  - Conference with Jitsi support (#43)
 
 Improvements 🙌:
+ - Share button in rooms gives room ID link without via parameters (#1927)
  - Give user the possibility to prevent accidental call (#1869)
  - Display device information (name, id and key) in Cryptography setting screen (#1784)
  - Ensure users do not accidentally ignore other users (#1890)
+ - Better handling DM creation when invitees cannot be inviting due to denied federation
  - Support new config.json format and config.domain.json files (#1682)
  - Increase Font size on Calling screen (#1643)
  - Make the user's Avatar live in the general settings
@@ -19,8 +45,13 @@ Bugfix 🐛:
  - Fix relative date time formatting (#822)
  - Fix crash reported by RageShake
  - Fix refreshing of sessions list when another session is logged out
+ - Fix IllegalArgumentException: Receiver not registered: NetworkInfoReceiver (#1960)
  - Failed to build unique file (#1954)
  - Can't handle ongoing call events in background (#1992)
+ - Highlighted Event when opening a permalink from another room (#1033)
+ - A Kick appears has "someone has made no change" (#1959)
+ - Avoid NetworkOnMainThreadException when setting a user avatar
+ - Renew turnserver credentials when ttl runs out
 
 Translations 🗣:
  - Add PlayStore description resources in the Triple-T format, to let Weblate handle them

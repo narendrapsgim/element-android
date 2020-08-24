@@ -17,6 +17,7 @@
 
 package org.matrix.android.sdk.internal.session.call
 
+import android.os.SystemClock
 import org.matrix.android.sdk.api.MatrixCallback
 import org.matrix.android.sdk.api.extensions.tryThis
 import org.matrix.android.sdk.api.session.call.CallSignalingService
@@ -58,18 +59,32 @@ internal class DefaultCallSignalingService @Inject constructor(
 
     private val activeCalls = mutableListOf<MxCall>()
 
-    private var cachedTurnServerResponse: TurnServerResponse? = null
+    private val cachedTurnServerResponse = object {
+        // Keep one minute safe to avoid considering the data is valid and then actually it is not when effectively using it.
+        private val MIN_TTL = 60
+
+        private val now = { SystemClock.elapsedRealtime() / 1000 }
+
+        private var expiresAt: Long = 0
+
+        var data: TurnServerResponse? = null
+            get() = if (expiresAt > now()) field else null
+            set(value) {
+                expiresAt = now() + (value?.ttl ?: 0) - MIN_TTL
+                field = value
+            }
+    }
 
     override fun getTurnServer(callback: MatrixCallback<TurnServerResponse>): Cancelable {
-        if (cachedTurnServerResponse != null) {
-            cachedTurnServerResponse?.let { callback.onSuccess(it) }
+        if (cachedTurnServerResponse.data != null) {
+            cachedTurnServerResponse.data?.let { callback.onSuccess(it) }
             return NoOpCancellable
         }
         return turnServerTask
                 .configureWith(GetTurnServerTask.Params) {
                     this.callback = object : MatrixCallback<TurnServerResponse> {
                         override fun onSuccess(data: TurnServerResponse) {
-                            cachedTurnServerResponse = data
+                            cachedTurnServerResponse.data = data
                             callback.onSuccess(data)
                         }
 
