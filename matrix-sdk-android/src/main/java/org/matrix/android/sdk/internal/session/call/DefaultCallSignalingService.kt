@@ -36,28 +36,21 @@ import org.matrix.android.sdk.api.util.Cancelable
 import org.matrix.android.sdk.api.util.NoOpCancellable
 import org.matrix.android.sdk.internal.di.UserId
 import org.matrix.android.sdk.internal.session.SessionScope
-import org.matrix.android.sdk.internal.session.call.model.MxCallImpl
-import org.matrix.android.sdk.internal.session.room.send.LocalEchoEventFactory
-import org.matrix.android.sdk.internal.session.room.send.RoomEventSender
 import org.matrix.android.sdk.internal.task.TaskExecutor
 import org.matrix.android.sdk.internal.task.configureWith
 import timber.log.Timber
-import java.util.UUID
 import javax.inject.Inject
 
 @SessionScope
 internal class DefaultCallSignalingService @Inject constructor(
         @UserId
         private val userId: String,
-        private val localEchoEventFactory: LocalEchoEventFactory,
-        private val roomEventSender: RoomEventSender,
+        private val activeCallHandler: ActiveCallHandler,
         private val taskExecutor: TaskExecutor,
         private val turnServerTask: GetTurnServerTask
 ) : CallSignalingService {
 
     private val callListeners = mutableSetOf<CallsListener>()
-
-    private val activeCalls = mutableListOf<MxCall>()
 
     private val cachedTurnServerResponse = object {
         // Keep one minute safe to avoid considering the data is valid and then actually it is not when effectively using it.
@@ -97,18 +90,7 @@ internal class DefaultCallSignalingService @Inject constructor(
     }
 
     override fun createOutgoingCall(roomId: String, otherUserId: String, isVideoCall: Boolean): MxCall {
-        return MxCallImpl(
-                callId = UUID.randomUUID().toString(),
-                isOutgoing = true,
-                roomId = roomId,
-                userId = userId,
-                otherUserId = otherUserId,
-                isVideoCall = isVideoCall,
-                localEchoEventFactory = localEchoEventFactory,
-                roomEventSender = roomEventSender
-        ).also {
-            activeCalls.add(it)
-        }
+        return activeCallHandler.onNewCall(roomId, otherUserId, isVideoCall)
     }
 
     override fun addCallListener(listener: CallsListener) {
@@ -120,8 +102,7 @@ internal class DefaultCallSignalingService @Inject constructor(
     }
 
     override fun getCallWithId(callId: String): MxCall? {
-        Timber.v("## VOIP getCallWithId $callId all calls ${activeCalls.map { it.callId }}")
-        return activeCalls.find { it.callId == callId }
+        return activeCallHandler.getCallWithId(callId)
     }
 
     internal fun onCallEvent(event: Event) {
@@ -152,19 +133,11 @@ internal class DefaultCallSignalingService @Inject constructor(
                     // Always ignore local echos of invite
                     return
                 }
-                event.getClearContent().toModel<CallInviteContent>()?.let { content ->
-                    val incomingCall = MxCallImpl(
-                            callId = content.callId ?: return@let,
-                            isOutgoing = false,
-                            roomId = event.roomId ?: return@let,
-                            userId = userId,
-                            otherUserId = event.senderId ?: return@let,
-                            isVideoCall = content.isVideo(),
-                            localEchoEventFactory = localEchoEventFactory,
-                            roomEventSender = roomEventSender
-                    )
-                    activeCalls.add(incomingCall)
-                    onCallInvite(incomingCall, content)
+                val newCall = activeCallHandler.onNewCall(event)
+                if (newCall != null) {
+                    event.getClearContent().toModel<CallInviteContent>()?.let { content ->
+                        onCallInvite(newCall, content)
+                    }
                 }
             }
             EventType.CALL_HANGUP     -> {
@@ -185,7 +158,7 @@ internal class DefaultCallSignalingService @Inject constructor(
                         return
                     }
 
-                    activeCalls.removeAll { it.callId == content.callId }
+                    activeCallHandler.onCallHangup(content.callId)
                     onCallHangup(content)
                 }
             }
@@ -195,7 +168,7 @@ internal class DefaultCallSignalingService @Inject constructor(
                     return
                 }
                 event.getClearContent().toModel<CallCandidatesContent>()?.let { content ->
-                    activeCalls.firstOrNull { it.callId == content.callId }?.let {
+                    activeCallHandler.getCallWithId(content.callId)?.let {
                         onCallIceCandidate(it, content)
                     }
                 }
@@ -245,8 +218,6 @@ internal class DefaultCallSignalingService @Inject constructor(
             }
         }
     }
-
-    fun isThereAnyActiveCall() = activeCalls.isNotEmpty()
 
     companion object {
         const val CALL_TIMEOUT_MS = 120_000

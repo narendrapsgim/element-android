@@ -19,6 +19,7 @@ package org.matrix.android.sdk.internal.session.sync.job
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Observer
 import com.squareup.moshi.JsonEncodingException
 import org.matrix.android.sdk.api.failure.Failure
 import org.matrix.android.sdk.api.failure.isTokenError
@@ -30,18 +31,14 @@ import org.matrix.android.sdk.internal.util.BackgroundDetectionObserver
 import org.matrix.android.sdk.internal.util.Debouncer
 import org.matrix.android.sdk.internal.util.createUIHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.matrix.android.sdk.api.session.call.CallsListener
 import org.matrix.android.sdk.api.session.call.MxCall
-import org.matrix.android.sdk.api.session.room.model.call.CallAnswerContent
-import org.matrix.android.sdk.api.session.room.model.call.CallCandidatesContent
-import org.matrix.android.sdk.api.session.room.model.call.CallHangupContent
-import org.matrix.android.sdk.api.session.room.model.call.CallInviteContent
-import org.matrix.android.sdk.internal.session.call.DefaultCallSignalingService
+import org.matrix.android.sdk.internal.session.call.ActiveCallHandler
 import timber.log.Timber
 import java.net.SocketTimeoutException
 import java.util.Timer
@@ -56,8 +53,8 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
                                               private val typingUsersTracker: DefaultTypingUsersTracker,
                                               private val networkConnectivityChecker: NetworkConnectivityChecker,
                                               private val backgroundDetectionObserver: BackgroundDetectionObserver,
-                                              private val callService: DefaultCallSignalingService
-) : Thread(), NetworkConnectivityChecker.Listener, BackgroundDetectionObserver.Listener, CallsListener {
+                                              private val activeCallHandler: ActiveCallHandler
+) : Thread(), NetworkConnectivityChecker.Listener, BackgroundDetectionObserver.Listener {
 
     private var state: SyncState = SyncState.Idle
     private var liveState = MutableLiveData<SyncState>(state)
@@ -70,9 +67,14 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
     private var isTokenValid = true
     private var retryNoNetworkTask: TimerTask? = null
 
+    private val activeCallListObserver = Observer<MutableList<MxCall>> { activeCalls ->
+        if (activeCalls.isEmpty() && backgroundDetectionObserver.isInBackground) {
+            pause()
+        }
+    }
+
     init {
         updateStateTo(SyncState.Idle)
-        callService.addCallListener(this)
     }
 
     fun setInitialForeground(initialForeground: Boolean) {
@@ -124,6 +126,9 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
 
     override fun run() {
         Timber.v("Start syncing...")
+
+        observeActiveCalls()
+
         isStarted = true
         networkConnectivityChecker.register(this)
         backgroundDetectionObserver.register(this)
@@ -172,6 +177,13 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
         updateStateTo(SyncState.Killed)
         backgroundDetectionObserver.unregister(this)
         networkConnectivityChecker.unregister(this)
+    }
+
+    private fun observeActiveCalls() {
+        syncScope.launch(Dispatchers.Main) {
+            activeCallHandler.getActiveCallsLiveData().removeObserver(activeCallListObserver)
+            activeCallHandler.getActiveCallsLiveData().observeForever(activeCallListObserver)
+        }
     }
 
     private suspend fun doSync(params: SyncTask.Params) {
@@ -224,26 +236,8 @@ internal class SyncThread @Inject constructor(private val syncTask: SyncTask,
     }
 
     override fun onMoveToBackground() {
-        if (!callService.isThereAnyActiveCall()) {
+        if (activeCallHandler.getActiveCallsLiveData().value.isNullOrEmpty()) {
             pause()
         }
     }
-
-    override fun onCallHangupReceived(callHangupContent: CallHangupContent) {
-        if (backgroundDetectionObserver.isInBackground && !callService.isThereAnyActiveCall()) {
-            pause()
-        }
-    }
-
-    override fun onCallManagedByOtherSession(callId: String) {
-        if (backgroundDetectionObserver.isInBackground && !callService.isThereAnyActiveCall()) {
-            pause()
-        }
-    }
-
-    override fun onCallInviteReceived(mxCall: MxCall, callInviteContent: CallInviteContent) { /* NOOP */ }
-
-    override fun onCallIceCandidateReceived(mxCall: MxCall, iceCandidatesContent: CallCandidatesContent) { /* NOOP */ }
-
-    override fun onCallAnswerReceived(callAnswerContent: CallAnswerContent) { /* NOOP */ }
 }
