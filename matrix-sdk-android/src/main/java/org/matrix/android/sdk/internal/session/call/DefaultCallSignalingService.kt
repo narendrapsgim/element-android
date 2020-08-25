@@ -36,9 +36,13 @@ import org.matrix.android.sdk.api.util.Cancelable
 import org.matrix.android.sdk.api.util.NoOpCancellable
 import org.matrix.android.sdk.internal.di.UserId
 import org.matrix.android.sdk.internal.session.SessionScope
+import org.matrix.android.sdk.internal.session.call.model.MxCallImpl
+import org.matrix.android.sdk.internal.session.room.send.LocalEchoEventFactory
+import org.matrix.android.sdk.internal.session.room.send.RoomEventSender
 import org.matrix.android.sdk.internal.task.TaskExecutor
 import org.matrix.android.sdk.internal.task.configureWith
 import timber.log.Timber
+import java.util.UUID
 import javax.inject.Inject
 
 @SessionScope
@@ -46,6 +50,8 @@ internal class DefaultCallSignalingService @Inject constructor(
         @UserId
         private val userId: String,
         private val activeCallHandler: ActiveCallHandler,
+        private val localEchoEventFactory: LocalEchoEventFactory,
+        private val roomEventSender: RoomEventSender,
         private val taskExecutor: TaskExecutor,
         private val turnServerTask: GetTurnServerTask
 ) : CallSignalingService {
@@ -90,7 +96,18 @@ internal class DefaultCallSignalingService @Inject constructor(
     }
 
     override fun createOutgoingCall(roomId: String, otherUserId: String, isVideoCall: Boolean): MxCall {
-        return activeCallHandler.onNewCall(roomId, otherUserId, isVideoCall)
+        val call = MxCallImpl(
+                callId = UUID.randomUUID().toString(),
+                isOutgoing = true,
+                roomId = roomId,
+                userId = userId,
+                otherUserId = otherUserId,
+                isVideoCall = isVideoCall,
+                localEchoEventFactory = localEchoEventFactory,
+                roomEventSender = roomEventSender
+        )
+        activeCallHandler.onNewCall(call)
+        return call
     }
 
     override fun addCallListener(listener: CallsListener) {
@@ -133,11 +150,20 @@ internal class DefaultCallSignalingService @Inject constructor(
                     // Always ignore local echos of invite
                     return
                 }
-                val newCall = activeCallHandler.onNewCall(event)
-                if (newCall != null) {
-                    event.getClearContent().toModel<CallInviteContent>()?.let { content ->
-                        onCallInvite(newCall, content)
-                    }
+                
+                event.getClearContent().toModel<CallInviteContent>()?.let { content ->
+                    val incomingCall = MxCallImpl(
+                            callId = content.callId ?: return@let,
+                            isOutgoing = false,
+                            roomId = event.roomId ?: return@let,
+                            userId = userId,
+                            otherUserId = event.senderId ?: return@let,
+                            isVideoCall = content.isVideo(),
+                            localEchoEventFactory = localEchoEventFactory,
+                            roomEventSender = roomEventSender
+                    )
+                    activeCallHandler.onNewCall(incomingCall)
+                    onCallInvite(incomingCall, content)
                 }
             }
             EventType.CALL_HANGUP     -> {
