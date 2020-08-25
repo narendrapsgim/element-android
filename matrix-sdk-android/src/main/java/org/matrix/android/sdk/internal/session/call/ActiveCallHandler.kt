@@ -20,9 +20,10 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import org.matrix.android.sdk.api.session.call.MxCall
 import org.matrix.android.sdk.internal.session.SessionScope
+import javax.inject.Inject
 
 @SessionScope
-internal class ActiveCallHandler {
+internal class ActiveCallHandler @Inject constructor() {
 
     private val activeCallListLiveData: MutableLiveData<MutableList<MxCall>> by lazy {
         MutableLiveData<MutableList<MxCall>>(mutableListOf())
