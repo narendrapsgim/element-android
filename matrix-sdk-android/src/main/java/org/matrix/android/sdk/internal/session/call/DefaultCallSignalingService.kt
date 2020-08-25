@@ -119,6 +119,7 @@ internal class DefaultCallSignalingService @Inject constructor(
     }
 
     override fun getCallWithId(callId: String): MxCall? {
+        Timber.v("## VOIP getCallWithId $callId all calls ${activeCallHandler.getActiveCallsLiveData().value?.map { it.callId }}")
         return activeCallHandler.getCallWithId(callId)
     }
 
@@ -154,7 +155,7 @@ internal class DefaultCallSignalingService @Inject constructor(
                     // Always ignore local echos of invite
                     return
                 }
-                
+
                 event.getClearContent().toModel<CallInviteContent>()?.let { content ->
                     val incomingCall = MxCallImpl(
                             callId = content.callId ?: return@let,
