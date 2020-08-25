@@ -122,6 +122,10 @@ internal class DefaultCallSignalingService @Inject constructor(
         return activeCallHandler.getCallWithId(callId)
     }
 
+    override fun isThereAnyActiveCall(): Boolean {
+        return activeCallHandler.getActiveCallsLiveData().value?.isNotEmpty() == true
+    }
+
     internal fun onCallEvent(event: Event) {
         when (event.getClearType()) {
             EventType.CALL_ANSWER     -> {
